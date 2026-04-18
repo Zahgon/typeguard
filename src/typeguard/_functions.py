@@ -252,29 +252,7 @@ def check_send_type(
     annotation: Any,
     memo: TypeCheckMemo,
 ) -> T:
-    if _suppression.type_checks_suppressed:
-        return sendval
-
-    if annotation is NoReturn or annotation is Never:
-        exc = TypeCheckError(
-            f"{func_name}() was declared never to be sent a value to but it was"
-        )
-        if memo.config.typecheck_fail_callback:
-            memo.config.typecheck_fail_callback(exc, memo)
-        else:
-            raise exc
-
-    try:
-        check_type_internal(sendval, annotation, memo)
-    except TypeCheckError as exc:
-        qualname = qualified_name(sendval, add_class_prefix=True)
-        exc.append_path_element(f"the value sent to generator ({qualname})")
-        if memo.config.typecheck_fail_callback:
-            memo.config.typecheck_fail_callback(exc, memo)
-        else:
-            raise
-
-    return sendval
+    pass
 
 
 def check_yield_type(
@@ -283,27 +261,7 @@ def check_yield_type(
     annotation: Any,
     memo: TypeCheckMemo,
 ) -> T:
-    if _suppression.type_checks_suppressed:
-        return yieldval
-
-    if annotation is NoReturn or annotation is Never:
-        exc = TypeCheckError(f"{func_name}() was declared never to yield but it did")
-        if memo.config.typecheck_fail_callback:
-            memo.config.typecheck_fail_callback(exc, memo)
-        else:
-            raise exc
-
-    try:
-        check_type_internal(yieldval, annotation, memo)
-    except TypeCheckError as exc:
-        qualname = qualified_name(yieldval, add_class_prefix=True)
-        exc.append_path_element(f"the yielded value ({qualname})")
-        if memo.config.typecheck_fail_callback:
-            memo.config.typecheck_fail_callback(exc, memo)
-        else:
-            raise
-
-    return yieldval
+    pass
 
 
 def check_variable_assignment(
@@ -311,46 +269,7 @@ def check_variable_assignment(
     groups: Sequence[list[tuple[str, Any]] | tuple[str, Any]],
     memo: TypeCheckMemo,
 ) -> Any:
-    if _suppression.type_checks_suppressed:
-        return value
-
-    value_to_return = value
-    for targets in groups:
-        values_to_check: list[tuple[Any, str, Any]]
-        if isinstance(targets, list):
-            values_to_check = []
-
-            # Get all the available values from a generator or arbitrary iterator
-            if not isinstance(value_to_return, list):
-                value_to_return = list(value)
-
-            iterator = iter(value_to_return)
-            for index, (name, annotation) in enumerate(targets):
-                if name.startswith("*"):
-                    remaining_values = list(iterator)
-                    num_remaining_targets = len(targets) - 1 - index
-                    cutoff_offset = len(remaining_values) - num_remaining_targets
-                    star_values = remaining_values[:cutoff_offset]
-                    iterator = iter(remaining_values[cutoff_offset:])
-                    values_to_check.append((star_values, name[1:], annotation))
-                else:
-                    next_value = next(iterator)
-                    values_to_check.append((next_value, name, annotation))
-        else:  # single target, no unpacking
-            values_to_check = [(value,) + targets]
-
-        for val, varname, annotation in values_to_check:
-            try:
-                check_type_internal(val, annotation, memo)
-            except TypeCheckError as exc:
-                qualname = qualified_name(val, add_class_prefix=True)
-                exc.append_path_element(f"value assigned to {varname} ({qualname})")
-                if memo.config.typecheck_fail_callback:
-                    memo.config.typecheck_fail_callback(exc, memo)
-                else:
-                    raise
-
-    return value_to_return
+    pass
 
 
 def warn_on_error(exc: TypeCheckError, memo: TypeCheckMemo) -> None:

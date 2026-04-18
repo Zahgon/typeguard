@@ -53,29 +53,10 @@ def suppress_type_checks(
     """
 
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
-        global type_checks_suppressed
-
-        with type_checks_suppress_lock:
-            type_checks_suppressed += 1
-
-        assert func is not None
-        try:
-            return func(*args, **kwargs)
-        finally:
-            with type_checks_suppress_lock:
-                type_checks_suppressed -= 1
+        pass
 
     def cm() -> Generator[None, None, None]:
-        global type_checks_suppressed
-
-        with type_checks_suppress_lock:
-            type_checks_suppressed += 1
-
-        try:
-            yield
-        finally:
-            with type_checks_suppress_lock:
-                type_checks_suppressed -= 1
+        pass
 
     if func is None:
         # Context manager mode

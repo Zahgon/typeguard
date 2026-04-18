@@ -156,57 +156,7 @@ def check_callable(
     args: tuple[Any, ...],
     memo: TypeCheckMemo,
 ) -> None:
-    if not callable(value):
-        raise TypeCheckError("is not callable")
-
-    if args:
-        try:
-            signature = inspect.signature(value)
-        except (TypeError, ValueError):
-            return
-
-        argument_types = args[0]
-        if isinstance(argument_types, list) and not any(
-            type(item) is ParamSpec for item in argument_types
-        ):
-            # The callable must not have keyword-only arguments without defaults
-            unfulfilled_kwonlyargs = [
-                param.name
-                for param in signature.parameters.values()
-                if param.kind == Parameter.KEYWORD_ONLY
-                and param.default == Parameter.empty
-            ]
-            if unfulfilled_kwonlyargs:
-                raise TypeCheckError(
-                    f"has mandatory keyword-only arguments in its declaration: "
-                    f"{', '.join(unfulfilled_kwonlyargs)}"
-                )
-
-            num_positional_args = num_mandatory_pos_args = 0
-            has_varargs = False
-            for param in signature.parameters.values():
-                if param.kind in (
-                    Parameter.POSITIONAL_ONLY,
-                    Parameter.POSITIONAL_OR_KEYWORD,
-                ):
-                    num_positional_args += 1
-                    if param.default is Parameter.empty:
-                        num_mandatory_pos_args += 1
-                elif param.kind == Parameter.VAR_POSITIONAL:
-                    has_varargs = True
-
-            if num_mandatory_pos_args > len(argument_types):
-                raise TypeCheckError(
-                    f"has too many mandatory positional arguments in its declaration; "
-                    f"expected {len(argument_types)} but {num_mandatory_pos_args} "
-                    f"mandatory positional argument(s) declared"
-                )
-            elif not has_varargs and num_positional_args < len(argument_types):
-                raise TypeCheckError(
-                    f"has too few arguments in its declaration; expected "
-                    f"{len(argument_types)} but {num_positional_args} argument(s) "
-                    f"declared"
-                )
+    pass
 
 
 def check_mapping(
@@ -215,33 +165,7 @@ def check_mapping(
     args: tuple[Any, ...],
     memo: TypeCheckMemo,
 ) -> None:
-    if origin_type is Dict or origin_type is dict:
-        if not isinstance(value, dict):
-            raise TypeCheckError("is not a dict")
-    if origin_type is MutableMapping or origin_type is collections.abc.MutableMapping:
-        if not isinstance(value, collections.abc.MutableMapping):
-            raise TypeCheckError("is not a mutable mapping")
-    elif not isinstance(value, collections.abc.Mapping):
-        raise TypeCheckError("is not a mapping")
-
-    if args:
-        key_type, value_type = args
-        if key_type is not Any or value_type is not Any:
-            samples = memo.config.collection_check_strategy.iterate_samples(
-                value.items()
-            )
-            for k, v in samples:
-                try:
-                    check_type_internal(k, key_type, memo)
-                except TypeCheckError as exc:
-                    exc.append_path_element(f"key {k!r}")
-                    raise
-
-                try:
-                    check_type_internal(v, value_type, memo)
-                except TypeCheckError as exc:
-                    exc.append_path_element(f"value of key {k!r}")
-                    raise
+    pass
 
 
 def check_typed_dict(
@@ -250,56 +174,7 @@ def check_typed_dict(
     args: tuple[Any, ...],
     memo: TypeCheckMemo,
 ) -> None:
-    if not isinstance(value, dict):
-        raise TypeCheckError("is not a dict")
-
-    declared_keys = frozenset(origin_type.__annotations__)
-    required_keys = set(origin_type.__required_keys__)
-    existing_keys = set(value)
-    if extra_keys := existing_keys - declared_keys:
-        if (
-            argtype := getattr(origin_type, "__extra_items__", NoExtraItems)
-        ) is NoExtraItems:
-            keys_formatted = ", ".join(
-                f'"{key}"' for key in sorted(extra_keys, key=repr)
-            )
-            raise TypeCheckError(f"has unexpected extra key(s): {keys_formatted}")
-
-        for key in extra_keys:
-            argvalue = value[key]
-            try:
-                check_type_internal(argvalue, argtype, memo)
-            except TypeCheckError as exc:
-                exc.append_path_element(f"value of key {key!r}")
-                raise
-
-    # Detect NotRequired fields which are hidden by get_type_hints()
-    type_hints: dict[str, type] = {}
-    for key, annotation in origin_type.__annotations__.items():
-        if isinstance(annotation, ForwardRef):
-            annotation = evaluate_forwardref(annotation, memo)
-
-        if get_origin(annotation) is NotRequired:
-            required_keys.discard(key)
-            annotation = get_args(annotation)[0]
-        elif get_origin(annotation) is Required:
-            required_keys.add(key)
-            annotation = get_args(annotation)[0]
-
-        type_hints[key] = annotation
-
-    if missing_keys := required_keys - existing_keys:
-        keys_formatted = ", ".join(f'"{key}"' for key in sorted(missing_keys, key=repr))
-        raise TypeCheckError(f"is missing required key(s): {keys_formatted}")
-
-    for key, argtype in type_hints.items():
-        argvalue = value.get(key, _missing)
-        if argvalue is not _missing:
-            try:
-                check_type_internal(argvalue, argtype, memo)
-            except TypeCheckError as exc:
-                exc.append_path_element(f"value of key {key!r}")
-                raise
+    pass
 
 
 def check_list(
@@ -308,17 +183,7 @@ def check_list(
     args: tuple[Any, ...],
     memo: TypeCheckMemo,
 ) -> None:
-    if not isinstance(value, list):
-        raise TypeCheckError("is not a list")
-
-    if args and args != (Any,):
-        samples = memo.config.collection_check_strategy.iterate_samples(value)
-        for i, v in enumerate(samples):
-            try:
-                check_type_internal(v, args[0], memo)
-            except TypeCheckError as exc:
-                exc.append_path_element(f"item {i}")
-                raise
+    pass
 
 
 def check_sequence(
@@ -327,17 +192,7 @@ def check_sequence(
     args: tuple[Any, ...],
     memo: TypeCheckMemo,
 ) -> None:
-    if not isinstance(value, collections.abc.Sequence):
-        raise TypeCheckError("is not a sequence")
-
-    if args and args != (Any,):
-        samples = memo.config.collection_check_strategy.iterate_samples(value)
-        for i, v in enumerate(samples):
-            try:
-                check_type_internal(v, args[0], memo)
-            except TypeCheckError as exc:
-                exc.append_path_element(f"item {i}")
-                raise
+    pass
 
 
 def check_set(
@@ -346,20 +201,7 @@ def check_set(
     args: tuple[Any, ...],
     memo: TypeCheckMemo,
 ) -> None:
-    if origin_type is frozenset:
-        if not isinstance(value, frozenset):
-            raise TypeCheckError("is not a frozenset")
-    elif not isinstance(value, AbstractSet):
-        raise TypeCheckError("is not a set")
-
-    if args and args != (Any,):
-        samples = memo.config.collection_check_strategy.iterate_samples(value)
-        for v in samples:
-            try:
-                check_type_internal(v, args[0], memo)
-            except TypeCheckError as exc:
-                exc.append_path_element(f"[{v}]")
-                raise
+    pass
 
 
 def check_tuple(
@@ -369,55 +211,7 @@ def check_tuple(
     memo: TypeCheckMemo,
 ) -> None:
     # Specialized check for NamedTuples
-    if field_types := getattr(origin_type, "__annotations__", None):
-        if not isinstance(value, origin_type):
-            raise TypeCheckError(
-                f"is not a named tuple of type {qualified_name(origin_type)}"
-            )
-
-        for name, field_type in field_types.items():
-            try:
-                check_type_internal(getattr(value, name), field_type, memo)
-            except TypeCheckError as exc:
-                exc.append_path_element(f"attribute {name!r}")
-                raise
-
-        return
-    elif not isinstance(value, tuple):
-        raise TypeCheckError("is not a tuple")
-
-    if args:
-        use_ellipsis = args[-1] is Ellipsis
-        tuple_params = args[: -1 if use_ellipsis else None]
-    else:
-        # Unparametrized Tuple or plain tuple
-        return
-
-    if use_ellipsis:
-        element_type = tuple_params[0]
-        samples = memo.config.collection_check_strategy.iterate_samples(value)
-        for i, element in enumerate(samples):
-            try:
-                check_type_internal(element, element_type, memo)
-            except TypeCheckError as exc:
-                exc.append_path_element(f"item {i}")
-                raise
-    elif tuple_params == ((),):
-        if value != ():
-            raise TypeCheckError("is not an empty tuple")
-    else:
-        if len(value) != len(tuple_params):
-            raise TypeCheckError(
-                f"has wrong number of elements (expected {len(tuple_params)}, got "
-                f"{len(value)} instead)"
-            )
-
-        for i, (element, element_type) in enumerate(zip(value, tuple_params)):
-            try:
-                check_type_internal(element, element_type, memo)
-            except TypeCheckError as exc:
-                exc.append_path_element(f"item {i}")
-                raise
+    pass
 
 
 def check_union(
@@ -426,22 +220,7 @@ def check_union(
     args: tuple[Any, ...],
     memo: TypeCheckMemo,
 ) -> None:
-    errors: dict[str, TypeCheckError] = {}
-    try:
-        for type_ in args:
-            try:
-                check_type_internal(value, type_, memo)
-                return
-            except TypeCheckError as exc:
-                errors[get_type_name(type_)] = exc
-
-        formatted_errors = indent(
-            "\n".join(f"{key}: {error}" for key, error in errors.items()), "  "
-        )
-    finally:
-        del errors  # avoid creating ref cycle
-
-    raise TypeCheckError(f"did not match any element in the union:\n{formatted_errors}")
+    pass
 
 
 def check_uniontype(
@@ -450,25 +229,7 @@ def check_uniontype(
     args: tuple[Any, ...],
     memo: TypeCheckMemo,
 ) -> None:
-    if not args:
-        return check_instance(value, types.UnionType, (), memo)
-
-    errors: dict[str, TypeCheckError] = {}
-    try:
-        for type_ in args:
-            try:
-                check_type_internal(value, type_, memo)
-                return
-            except TypeCheckError as exc:
-                errors[get_type_name(type_)] = exc
-
-        formatted_errors = indent(
-            "\n".join(f"{key}: {error}" for key, error in errors.items()), "  "
-        )
-    finally:
-        del errors  # avoid creating ref cycle
-
-    raise TypeCheckError(f"did not match any element in the union:\n{formatted_errors}")
+    pass
 
 
 def check_class(
@@ -477,60 +238,7 @@ def check_class(
     args: tuple[Any, ...],
     memo: TypeCheckMemo,
 ) -> None:
-    if not isclass(value) and not isinstance(value, generic_alias_types):
-        raise TypeCheckError("is not a class")
-
-    if not args:
-        return
-
-    if isinstance(args[0], ForwardRef):
-        expected_class = evaluate_forwardref(args[0], memo)
-    else:
-        expected_class = args[0]
-
-    if type(expected_class) in type_alias_types:
-        expected_class = expected_class.__value__
-
-    if expected_class is Any:
-        return
-    elif expected_class is typing_extensions.Self:
-        check_self(value, get_origin(expected_class), get_args(expected_class), memo)
-    elif getattr(expected_class, "_is_protocol", False):
-        check_protocol(value, expected_class, (), memo)
-    elif isinstance(expected_class, TypeVar):
-        check_typevar(value, expected_class, (), memo, subclass_check=True)
-    elif get_origin(expected_class) is Union:
-        errors: dict[str, TypeCheckError] = {}
-        try:
-            for arg in get_args(expected_class):
-                if arg is Any:
-                    return
-
-                try:
-                    check_class(value, type, (arg,), memo)
-                    return
-                except TypeCheckError as exc:
-                    errors[get_type_name(arg)] = exc
-            else:
-                formatted_errors = indent(
-                    "\n".join(f"{key}: {error}" for key, error in errors.items()), "  "
-                )
-                raise TypeCheckError(
-                    f"did not match any element in the union:\n{formatted_errors}"
-                )
-        finally:
-            del errors  # avoid creating ref cycle
-    else:
-        if isinstance(expected_class, generic_alias_types):
-            expected_class = get_origin(expected_class)
-
-        if isinstance(value, generic_alias_types):
-            value = get_origin(value)
-
-        if not issubclass(value, expected_class):
-            raise TypeCheckError(
-                f"is not a subclass of {qualified_name(expected_class)}"
-            )
+    pass
 
 
 def check_newtype(
@@ -539,7 +247,7 @@ def check_newtype(
     args: tuple[Any, ...],
     memo: TypeCheckMemo,
 ) -> None:
-    check_type_internal(value, origin_type.__supertype__, memo)
+    pass
 
 
 def check_instance(
@@ -548,8 +256,7 @@ def check_instance(
     args: tuple[Any, ...],
     memo: TypeCheckMemo,
 ) -> None:
-    if not isinstance(value, origin_type):
-        raise TypeCheckError(f"is not an instance of {qualified_name(origin_type)}")
+    pass
 
 
 def check_typevar(
@@ -560,31 +267,11 @@ def check_typevar(
     *,
     subclass_check: bool = False,
 ) -> None:
-    if origin_type.__bound__ is not None:
-        annotation = (
-            type[origin_type.__bound__] if subclass_check else origin_type.__bound__
-        )
-        check_type_internal(value, annotation, memo)
-    elif origin_type.__constraints__:
-        for constraint in origin_type.__constraints__:
-            annotation = Type[constraint] if subclass_check else constraint
-            try:
-                check_type_internal(value, annotation, memo)
-            except TypeCheckError:
-                pass
-            else:
-                break
-        else:
-            formatted_constraints = ", ".join(
-                get_type_name(constraint) for constraint in origin_type.__constraints__
-            )
-            raise TypeCheckError(
-                f"does not match any of the constraints ({formatted_constraints})"
-            )
+    pass
 
 
 def _is_literal_type(typ: object) -> bool:
-    return typ is typing.Literal or typ is typing_extensions.Literal
+    pass
 
 
 def check_literal(
@@ -593,31 +280,7 @@ def check_literal(
     args: tuple[Any, ...],
     memo: TypeCheckMemo,
 ) -> None:
-    def get_literal_args(literal_args: tuple[Any, ...]) -> tuple[Any, ...]:
-        retval: list[Any] = []
-        for arg in literal_args:
-            if _is_literal_type(get_origin(arg)):
-                retval.extend(get_literal_args(arg.__args__))
-            elif arg is None or isinstance(arg, (int, str, bytes, bool, Enum)):
-                retval.append(arg)
-            else:
-                raise TypeError(
-                    f"Illegal literal value: {arg}"
-                )  # TypeError here is deliberate
-
-        return tuple(retval)
-
-    final_args = tuple(get_literal_args(args))
-    try:
-        index = final_args.index(value)
-    except ValueError:
-        pass
-    else:
-        if type(final_args[index]) is type(value):
-            return
-
-    formatted_args = ", ".join(repr(arg) for arg in final_args)
-    raise TypeCheckError(f"is not any of ({formatted_args})") from None
+    pass
 
 
 def check_literal_string(
@@ -626,7 +289,7 @@ def check_literal_string(
     args: tuple[Any, ...],
     memo: TypeCheckMemo,
 ) -> None:
-    check_type_internal(value, str, memo)
+    pass
 
 
 def check_typeguard(
@@ -635,7 +298,7 @@ def check_typeguard(
     args: tuple[Any, ...],
     memo: TypeCheckMemo,
 ) -> None:
-    check_type_internal(value, bool, memo)
+    pass
 
 
 def check_none(
@@ -644,8 +307,7 @@ def check_none(
     args: tuple[Any, ...],
     memo: TypeCheckMemo,
 ) -> None:
-    if value is not None:
-        raise TypeCheckError("is not None")
+    pass
 
 
 def check_number(
@@ -654,10 +316,7 @@ def check_number(
     args: tuple[Any, ...],
     memo: TypeCheckMemo,
 ) -> None:
-    if origin_type is complex and not isinstance(value, (complex, float, int)):
-        raise TypeCheckError("is neither complex, float or int")
-    elif origin_type is float and not isinstance(value, (float, int)):
-        raise TypeCheckError("is neither float or int")
+    pass
 
 
 def check_io(
@@ -666,169 +325,11 @@ def check_io(
     args: tuple[Any, ...],
     memo: TypeCheckMemo,
 ) -> None:
-    if origin_type is TextIO or (origin_type is IO and args == (str,)):
-        if not isinstance(value, TextIOBase):
-            raise TypeCheckError("is not a text based I/O object")
-    elif origin_type is BinaryIO or (origin_type is IO and args == (bytes,)):
-        if not isinstance(value, (RawIOBase, BufferedIOBase)):
-            raise TypeCheckError("is not a binary I/O object")
-    elif not isinstance(value, IOBase):
-        raise TypeCheckError("is not an I/O object")
+    pass
 
 
 def check_signature_compatible(subject: type, protocol: type, attrname: str) -> None:
-    subject_attr = getattr(subject, attrname)
-    try:
-        subject_sig = inspect.signature(subject_attr)
-    except ValueError:
-        return  # this can happen with builtins where the signature cannot be retrieved
-
-    protocol_sig = inspect.signature(getattr(protocol, attrname))
-    protocol_type: typing.Literal["instance", "class", "static"] = "instance"
-    subject_type: typing.Literal["instance", "class", "static"] = "instance"
-
-    # Check if the protocol-side method is a class method or static method
-    for klass in protocol.__mro__:
-        if attrname in klass.__dict__:
-            descriptor = klass.__dict__[attrname]
-            if isinstance(descriptor, staticmethod):
-                protocol_type = "static"
-            elif isinstance(descriptor, classmethod):
-                protocol_type = "class"
-
-            break
-
-    # Check if the subject-side method is a class method or static method
-    for klass in subject.__mro__:
-        if attrname in klass.__dict__:
-            descriptor = klass.__dict__[attrname]
-            if isinstance(descriptor, staticmethod):
-                subject_type = "static"
-            elif isinstance(descriptor, classmethod):
-                subject_type = "class"
-
-            break
-
-    if protocol_type == "instance" and subject_type != "instance":
-        raise TypeCheckError(
-            f"should be an instance method but it's a {subject_type} method"
-        )
-    elif protocol_type != "instance" and subject_type == "instance":
-        raise TypeCheckError(
-            f"should be a {protocol_type} method but it's an instance method"
-        )
-
-    expected_varargs = any(
-        param
-        for param in protocol_sig.parameters.values()
-        if param.kind is Parameter.VAR_POSITIONAL
-    )
-    has_varargs = any(
-        param
-        for param in subject_sig.parameters.values()
-        if param.kind is Parameter.VAR_POSITIONAL
-    )
-    if expected_varargs and not has_varargs:
-        raise TypeCheckError("should accept variable positional arguments but doesn't")
-
-    protocol_has_varkwargs = any(
-        param
-        for param in protocol_sig.parameters.values()
-        if param.kind is Parameter.VAR_KEYWORD
-    )
-    subject_has_varkwargs = any(
-        param
-        for param in subject_sig.parameters.values()
-        if param.kind is Parameter.VAR_KEYWORD
-    )
-    if protocol_has_varkwargs and not subject_has_varkwargs:
-        raise TypeCheckError("should accept variable keyword arguments but doesn't")
-
-    # Check that the callable has at least the expect amount of positional-only
-    # arguments (and no extra positional-only arguments without default values)
-    if not has_varargs:
-        protocol_args = [
-            param
-            for param in protocol_sig.parameters.values()
-            if param.kind
-            in (Parameter.POSITIONAL_ONLY, Parameter.POSITIONAL_OR_KEYWORD)
-        ]
-        subject_args = [
-            param
-            for param in subject_sig.parameters.values()
-            if param.kind
-            in (Parameter.POSITIONAL_ONLY, Parameter.POSITIONAL_OR_KEYWORD)
-        ]
-
-        # Remove the "self" parameter from the protocol arguments to match
-        if protocol_type == "instance":
-            protocol_args.pop(0)
-
-        # Remove the "self" parameter from the subject arguments to match
-        if subject_type == "instance":
-            subject_args.pop(0)
-
-        for protocol_arg, subject_arg in zip_longest(protocol_args, subject_args):
-            if protocol_arg is None:
-                if subject_arg.default is Parameter.empty:
-                    raise TypeCheckError("has too many mandatory positional arguments")
-
-                break
-
-            if subject_arg is None:
-                raise TypeCheckError("has too few positional arguments")
-
-            if (
-                protocol_arg.kind is Parameter.POSITIONAL_OR_KEYWORD
-                and subject_arg.kind is Parameter.POSITIONAL_ONLY
-            ):
-                raise TypeCheckError(
-                    f"has an argument ({subject_arg.name}) that should not be "
-                    f"positional-only"
-                )
-
-            if (
-                protocol_arg.kind is Parameter.POSITIONAL_OR_KEYWORD
-                and protocol_arg.name != subject_arg.name
-            ):
-                raise TypeCheckError(
-                    f"has a positional argument ({subject_arg.name}) that should be "
-                    f"named {protocol_arg.name!r} at this position"
-                )
-
-    protocol_kwonlyargs = {
-        param.name: param
-        for param in protocol_sig.parameters.values()
-        if param.kind is Parameter.KEYWORD_ONLY
-    }
-    subject_kwonlyargs = {
-        param.name: param
-        for param in subject_sig.parameters.values()
-        if param.kind is Parameter.KEYWORD_ONLY
-    }
-    if not subject_has_varkwargs:
-        # Check that the signature has at least the required keyword-only arguments, and
-        # no extra mandatory keyword-only arguments
-        if missing_kwonlyargs := [
-            param.name
-            for param in protocol_kwonlyargs.values()
-            if param.name not in subject_kwonlyargs
-        ]:
-            raise TypeCheckError(
-                "is missing keyword-only arguments: " + ", ".join(missing_kwonlyargs)
-            )
-
-    if not protocol_has_varkwargs:
-        if extra_kwonlyargs := [
-            param.name
-            for param in subject_kwonlyargs.values()
-            if param.default is Parameter.empty
-            and param.name not in protocol_kwonlyargs
-        ]:
-            raise TypeCheckError(
-                "has mandatory keyword-only arguments not present in the protocol: "
-                + ", ".join(extra_kwonlyargs)
-            )
+    pass
 
 
 def check_protocol(
@@ -837,49 +338,7 @@ def check_protocol(
     args: tuple[Any, ...],
     memo: TypeCheckMemo,
 ) -> None:
-    origin_annotations = typing.get_type_hints(origin_type)
-    for attrname in sorted(typing_extensions.get_protocol_members(origin_type)):
-        if (annotation := origin_annotations.get(attrname)) is not None:
-            try:
-                subject_member = getattr(value, attrname)
-            except AttributeError:
-                raise TypeCheckError(
-                    f"is not compatible with the {origin_type.__qualname__} "
-                    f"protocol because it has no attribute named {attrname!r}"
-                ) from None
-
-            try:
-                check_type_internal(subject_member, annotation, memo)
-            except TypeCheckError as exc:
-                raise TypeCheckError(
-                    f"is not compatible with the {origin_type.__qualname__} "
-                    f"protocol because its {attrname!r} attribute {exc}"
-                ) from None
-        elif callable(getattr(origin_type, attrname)):
-            try:
-                subject_member = getattr(value, attrname)
-            except AttributeError:
-                raise TypeCheckError(
-                    f"is not compatible with the {origin_type.__qualname__} "
-                    f"protocol because it has no method named {attrname!r}"
-                ) from None
-
-            if not callable(subject_member):
-                raise TypeCheckError(
-                    f"is not compatible with the {origin_type.__qualname__} "
-                    f"protocol because its {attrname!r} attribute is not a callable"
-                )
-
-            # TODO: implement assignability checks for parameter and return value
-            #  annotations
-            subject = value if isclass(value) else value.__class__
-            try:
-                check_signature_compatible(subject, origin_type, attrname)
-            except TypeCheckError as exc:
-                raise TypeCheckError(
-                    f"is not compatible with the {origin_type.__qualname__} "
-                    f"protocol because its {attrname!r} method {exc}"
-                ) from None
+    pass
 
 
 def check_byteslike(
@@ -888,8 +347,7 @@ def check_byteslike(
     args: tuple[Any, ...],
     memo: TypeCheckMemo,
 ) -> None:
-    if not isinstance(value, (bytearray, bytes, memoryview)):
-        raise TypeCheckError("is not bytes-like")
+    pass
 
 
 def check_self(
@@ -898,18 +356,7 @@ def check_self(
     args: tuple[Any, ...],
     memo: TypeCheckMemo,
 ) -> None:
-    if memo.self_type is None:
-        raise TypeCheckError("cannot be checked against Self outside of a method call")
-
-    if isclass(value):
-        if not issubclass(value, memo.self_type):
-            raise TypeCheckError(
-                f"is not a subclass of the self type ({qualified_name(memo.self_type)})"
-            )
-    elif not isinstance(value, memo.self_type):
-        raise TypeCheckError(
-            f"is not an instance of the self type ({qualified_name(memo.self_type)})"
-        )
+    pass
 
 
 def check_paramspec(
@@ -1061,36 +508,7 @@ else:
 def builtin_checker_lookup(
     origin_type: Any, args: tuple[Any, ...], extras: tuple[Any, ...]
 ) -> TypeCheckerCallable | None:
-    checker = origin_type_checkers.get(origin_type)
-    if checker is not None:
-        return checker
-    elif is_typeddict(origin_type):
-        return check_typed_dict
-    elif isclass(origin_type) and issubclass(
-        origin_type,
-        Tuple,  # type: ignore[arg-type]
-    ):
-        # NamedTuple
-        return check_tuple
-    elif getattr(origin_type, "_is_protocol", False):
-        return check_protocol
-    elif isinstance(origin_type, ParamSpec):
-        return check_paramspec
-    elif isinstance(origin_type, TypeVar):
-        return check_typevar
-    elif origin_type.__class__ is NewType:
-        # typing.NewType on Python 3.10+
-        return check_newtype
-    elif (
-        isfunction(origin_type)
-        and getattr(origin_type, "__module__", None) == "typing"
-        and getattr(origin_type, "__qualname__", "").startswith("NewType.")
-        and hasattr(origin_type, "__supertype__")
-    ):
-        # typing.NewType on Python 3.9
-        return check_newtype
-
-    return None
+    pass
 
 
 checker_lookup_functions.append(builtin_checker_lookup)

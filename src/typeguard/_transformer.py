@@ -169,71 +169,20 @@ class TransformMemo:
                 break
 
     def get_unused_name(self, name: str) -> str:
-        memo: TransformMemo | None = self
-        while memo is not None:
-            if name in memo.local_names:
-                memo = self
-                name += "_"
-            else:
-                memo = memo.parent
-
-        self.local_names.add(name)
-        return name
+        pass
 
     def is_ignored_name(self, expression: expr | Expr | None) -> bool:
-        top_expression = (
-            expression.value if isinstance(expression, Expr) else expression
-        )
-
-        if isinstance(top_expression, Attribute) and isinstance(
-            top_expression.value, Name
-        ):
-            name = top_expression.value.id
-        elif isinstance(top_expression, Name):
-            name = top_expression.id
-        else:
-            return False
-
-        memo: TransformMemo | None = self
-        while memo is not None:
-            if name in memo.ignored_names:
-                return True
-
-            memo = memo.parent
-
-        return False
+        pass
 
     def get_memo_name(self) -> Name:
-        if not self.memo_var_name:
-            self.memo_var_name = Name(id="memo", ctx=Load())
-
-        return self.memo_var_name
+        pass
 
     def get_import(self, module: str, name: str) -> Name:
-        if module in self.load_names and name in self.load_names[module]:
-            return self.load_names[module][name]
-
-        qualified_name = f"{module}.{name}"
-        if name in self.imported_names and self.imported_names[name] == qualified_name:
-            return Name(id=name, ctx=Load())
-
-        alias = self.get_unused_name(name)
-        node = self.load_names[module][name] = Name(id=alias, ctx=Load())
-        self.imported_names[name] = qualified_name
-        return node
+        pass
 
     def insert_imports(self, node: Module | FunctionDef | AsyncFunctionDef) -> None:
         """Insert imports needed by injected code."""
-        if not self.load_names:
-            return
-
-        # Insert imports after any "from __future__ ..." imports and any docstring
-        for modulename, names in self.load_names.items():
-            aliases = [
-                alias(orig_name, new_name.id if orig_name != new_name.id else None)
-                for orig_name, new_name in sorted(names.items())
-            ]
-            node.body.insert(self.code_inject_index, ImportFrom(modulename, aliases, 0))
+        pass
 
     def name_matches(self, expression: expr | Expr | None, *names: str) -> bool:
         if expression is None:
@@ -273,13 +222,7 @@ class TransformMemo:
             return False
 
     def get_config_keywords(self) -> list[keyword]:
-        if self.parent and isinstance(self.parent.node, ClassDef):
-            overrides = self.parent.configuration_overrides.copy()
-        else:
-            overrides = {}
-
-        overrides.update(self.configuration_overrides)
-        return [keyword(key, value) for key, value in overrides.items()]
+        pass
 
 
 class NameCollector(NodeVisitor):
@@ -287,21 +230,16 @@ class NameCollector(NodeVisitor):
         self.names: set[str] = set()
 
     def visit_Import(self, node: Import) -> None:
-        for name in node.names:
-            self.names.add(name.asname or name.name)
+        pass
 
     def visit_ImportFrom(self, node: ImportFrom) -> None:
-        for name in node.names:
-            self.names.add(name.asname or name.name)
+        pass
 
     def visit_Assign(self, node: Assign) -> None:
-        for target in node.targets:
-            if isinstance(target, Name):
-                self.names.add(target.id)
+        pass
 
     def visit_NamedExpr(self, node: NamedExpr) -> Any:
-        if isinstance(node.target, Name):
-            self.names.add(node.target.id)
+        pass
 
     def visit_FunctionDef(self, node: FunctionDef) -> None:
         pass
@@ -317,22 +255,19 @@ class GeneratorDetector(NodeVisitor):
     in_root_function: bool = False
 
     def visit_Yield(self, node: Yield) -> Any:
-        self.contains_yields = True
+        pass
 
     def visit_YieldFrom(self, node: YieldFrom) -> Any:
-        self.contains_yields = True
+        pass
 
     def visit_ClassDef(self, node: ClassDef) -> Any:
         pass
 
     def visit_FunctionDef(self, node: FunctionDef | AsyncFunctionDef) -> Any:
-        if not self.in_root_function:
-            self.in_root_function = True
-            self.generic_visit(node)
-            self.in_root_function = False
+        pass
 
     def visit_AsyncFunctionDef(self, node: AsyncFunctionDef) -> Any:
-        self.visit_FunctionDef(node)
+        pass
 
 
 class AnnotationTransformer(NodeTransformer):
@@ -372,117 +307,23 @@ class AnnotationTransformer(NodeTransformer):
         return new_node
 
     def visit_BinOp(self, node: BinOp) -> Any:
-        self.generic_visit(node)
-
-        if isinstance(node.op, BitOr):
-            # If either branch of the BinOp has been transformed to `None`, it means
-            # that a type in the union was ignored, so the entire annotation should be
-            # ignored
-            if not hasattr(node, "left") or not hasattr(node, "right"):
-                return None
-
-            # Return Any if either side is Any
-            if self._memo.name_matches(node.left, *anytype_names):
-                return node.left
-            elif self._memo.name_matches(node.right, *anytype_names):
-                return node.right
-
-            # Turn union types to typing.Union constructs on Python 3.9
-            if sys.version_info < (3, 10):
-                union_name = self.transformer._get_import("typing", "Union")
-                return Subscript(
-                    value=union_name,
-                    slice=Tuple(elts=[node.left, node.right], ctx=Load()),
-                    ctx=Load(),
-                )
-
-        return node
+        pass
 
     def visit_Attribute(self, node: Attribute) -> Any:
-        if self._memo.is_ignored_name(node):
-            return None
-
-        return node
+        pass
 
     def visit_Subscript(self, node: Subscript) -> Any:
-        if self._memo.is_ignored_name(node.value):
-            return None
-
-        # The subscript of typing(_extensions).Literal can be any arbitrary string, so
-        # don't try to evaluate it as code
-        if node.slice:
-            if isinstance(node.slice, Tuple):
-                if self._memo.name_matches(node.value, *annotated_names):
-                    # Only treat the first argument to typing.Annotated as a potential
-                    # forward reference
-                    items = cast(
-                        typing.List[expr],
-                        [self.visit(node.slice.elts[0])] + node.slice.elts[1:],
-                    )
-                else:
-                    items = cast(
-                        typing.List[expr],
-                        [self.visit(item) for item in node.slice.elts],
-                    )
-
-                # If this is a Union and any of the items is Any, erase the entire
-                # annotation
-                if self._memo.name_matches(node.value, "typing.Union") and any(
-                    item is None
-                    or (
-                        isinstance(item, expr)
-                        and self._memo.name_matches(item, *anytype_names)
-                    )
-                    for item in items
-                ):
-                    return None
-
-                # If all items in the subscript were Any, erase the subscript entirely
-                if all(item is None for item in items):
-                    return node.value
-
-                for index, item in enumerate(items):
-                    if item is None:
-                        items[index] = self.transformer._get_import("typing", "Any")
-
-                node.slice.elts = items
-            else:
-                self.generic_visit(node)
-
-                # If the transformer erased the slice entirely, just return the node
-                # value without the subscript (unless it's Optional, in which case erase
-                # the node entirely
-                if self._memo.name_matches(
-                    node.value, "typing.Optional"
-                ) and not hasattr(node, "slice"):
-                    return None
-                if sys.version_info >= (3, 9) and not hasattr(node, "slice"):
-                    return node.value
-                elif sys.version_info < (3, 9) and not hasattr(node.slice, "value"):
-                    return node.value
-
-        return node
+        pass
 
     def visit_Name(self, node: Name) -> Any:
-        if self._memo.is_ignored_name(node):
-            return None
-
-        return node
+        pass
 
     def visit_Call(self, node: Call) -> Any:
         # Don't recurse into calls
-        return node
+        pass
 
     def visit_Constant(self, node: Constant) -> Any:
-        if isinstance(node.value, str):
-            expression = ast.parse(node.value, mode="eval")
-            new_node = self.visit(expression)
-            if new_node:
-                return copy_location(new_node.body, node)
-            else:
-                return None
-
-        return node
+        pass
 
 
 class TypeguardTransformer(NodeTransformer):
@@ -496,80 +337,16 @@ class TypeguardTransformer(NodeTransformer):
         self.target_lineno = target_lineno
 
     def generic_visit(self, node: AST) -> AST:
-        has_non_empty_body_initially = bool(getattr(node, "body", None))
-        initial_type = type(node)
-
-        node = super().generic_visit(node)
-
-        if (
-            type(node) is initial_type
-            and has_non_empty_body_initially
-            and hasattr(node, "body")
-            and not node.body
-        ):
-            # If we have still the same node type after transformation
-            # but we've optimised it's body away, we add a `pass` statement.
-            node.body = [Pass()]
-
-        return node
+        pass
 
     @contextmanager
     def _use_memo(
         self, node: ClassDef | FunctionDef | AsyncFunctionDef
     ) -> Generator[None, Any, None]:
-        new_memo = TransformMemo(node, self._memo, self._memo.path + (node.name,))
-        old_memo = self._memo
-        self._memo = new_memo
-
-        if isinstance(node, (FunctionDef, AsyncFunctionDef)):
-            new_memo.should_instrument = (
-                self._target_path is None or new_memo.path == self._target_path
-            )
-            if new_memo.should_instrument:
-                # Check if the function is a generator function
-                detector = GeneratorDetector()
-                detector.visit(node)
-
-                # Extract yield, send and return types where possible from a subscripted
-                # annotation like Generator[int, str, bool]
-                return_annotation = deepcopy(node.returns)
-                if detector.contains_yields and new_memo.name_matches(
-                    return_annotation, *generator_names
-                ):
-                    if isinstance(return_annotation, Subscript):
-                        if isinstance(return_annotation.slice, Tuple):
-                            items = return_annotation.slice.elts
-                        else:
-                            items = [return_annotation.slice]
-
-                        if len(items) > 0:
-                            new_memo.yield_annotation = self._convert_annotation(
-                                items[0]
-                            )
-
-                        if len(items) > 1:
-                            new_memo.send_annotation = self._convert_annotation(
-                                items[1]
-                            )
-
-                        if len(items) > 2:
-                            new_memo.return_annotation = self._convert_annotation(
-                                items[2]
-                            )
-                else:
-                    new_memo.return_annotation = self._convert_annotation(
-                        return_annotation
-                    )
-
-        if isinstance(node, AsyncFunctionDef):
-            new_memo.is_async = True
-
-        yield
-        self._memo = old_memo
+        pass
 
     def _get_import(self, module: str, name: str) -> Name:
-        memo = self._memo if self._target_path else self._module_memo
-        return memo.get_import(module, name)
+        pass
 
     @overload
     def _convert_annotation(self, annotation: None) -> None: ...
@@ -578,74 +355,22 @@ class TypeguardTransformer(NodeTransformer):
     def _convert_annotation(self, annotation: expr) -> expr: ...
 
     def _convert_annotation(self, annotation: expr | None) -> expr | None:
-        if annotation is None:
-            return None
-
-        # Convert PEP 604 unions (x | y) and generic built-in collections where
-        # necessary, and undo forward references
-        new_annotation = cast(expr, AnnotationTransformer(self).visit(annotation))
-        if isinstance(new_annotation, expr):
-            new_annotation = ast.copy_location(new_annotation, annotation)
-
-            # Store names used in the annotation
-            names = {node.id for node in walk(new_annotation) if isinstance(node, Name)}
-            self.names_used_in_annotations.update(names)
-
-        return new_annotation
+        pass
 
     def visit_Name(self, node: Name) -> Name:
-        self._memo.local_names.add(node.id)
-        return node
+        pass
 
     def visit_Module(self, node: Module) -> Module:
-        self._module_memo = self._memo = TransformMemo(node, None, ())
-        self.generic_visit(node)
-        self._module_memo.insert_imports(node)
-
-        fix_missing_locations(node)
-        return node
+        pass
 
     def visit_Import(self, node: Import) -> Import:
-        for name in node.names:
-            self._memo.local_names.add(name.asname or name.name)
-            self._memo.imported_names[name.asname or name.name] = name.name
-
-        return node
+        pass
 
     def visit_ImportFrom(self, node: ImportFrom) -> ImportFrom:
-        for name in node.names:
-            if name.name != "*":
-                alias = name.asname or name.name
-                self._memo.local_names.add(alias)
-                self._memo.imported_names[alias] = f"{node.module}.{name.name}"
-
-        return node
+        pass
 
     def visit_ClassDef(self, node: ClassDef) -> ClassDef | None:
-        self._memo.local_names.add(node.name)
-
-        # Eliminate top level classes not belonging to the target path
-        if (
-            self._target_path is not None
-            and not self._memo.path
-            and node.name != self._target_path[0]
-        ):
-            return None
-
-        with self._use_memo(node):
-            for decorator in node.decorator_list.copy():
-                if self._memo.name_matches(decorator, "typeguard.typechecked"):
-                    # Remove the decorator to prevent duplicate instrumentation
-                    node.decorator_list.remove(decorator)
-
-                    # Store any configuration overrides
-                    if isinstance(decorator, Call) and decorator.keywords:
-                        self._memo.configuration_overrides.update(
-                            {kw.arg: kw.value for kw in decorator.keywords if kw.arg}
-                        )
-
-            self.generic_visit(node)
-            return node
+        pass
 
     def visit_FunctionDef(
         self, node: FunctionDef | AsyncFunctionDef
@@ -656,293 +381,16 @@ class TypeguardTransformer(NodeTransformer):
         ends without an explicit "return".
 
         """
-        self._memo.local_names.add(node.name)
-
-        # Eliminate top level functions not belonging to the target path
-        if (
-            self._target_path is not None
-            and not self._memo.path
-            and node.name != self._target_path[0]
-        ):
-            return None
-
-        # Skip instrumentation if we're instrumenting the whole module and the function
-        # contains either @no_type_check or @typeguard_ignore
-        if self._target_path is None:
-            for decorator in node.decorator_list:
-                if self._memo.name_matches(decorator, *ignore_decorators):
-                    return node
-
-        with self._use_memo(node):
-            arg_annotations: dict[str, Any] = {}
-            if self._target_path is None or self._memo.path == self._target_path:
-                # Find line number we're supposed to match against
-                if node.decorator_list:
-                    first_lineno = node.decorator_list[0].lineno
-                else:
-                    first_lineno = node.lineno
-
-                for decorator in node.decorator_list.copy():
-                    if self._memo.name_matches(decorator, "typing.overload"):
-                        # Remove overloads entirely
-                        return None
-                    elif self._memo.name_matches(decorator, "typeguard.typechecked"):
-                        # Remove the decorator to prevent duplicate instrumentation
-                        node.decorator_list.remove(decorator)
-
-                        # Store any configuration overrides
-                        if isinstance(decorator, Call) and decorator.keywords:
-                            self._memo.configuration_overrides = {
-                                kw.arg: kw.value for kw in decorator.keywords if kw.arg
-                            }
-
-                if self.target_lineno == first_lineno:
-                    assert self.target_node is None
-                    self.target_node = node
-                    if node.decorator_list:
-                        self.target_lineno = node.decorator_list[0].lineno
-                    else:
-                        self.target_lineno = node.lineno
-
-                all_args = node.args.posonlyargs + node.args.args + node.args.kwonlyargs
-
-                # Ensure that any type shadowed by the positional or keyword-only
-                # argument names are ignored in this function
-                for arg in all_args:
-                    self._memo.ignored_names.add(arg.arg)
-
-                # Ensure that any type shadowed by the variable positional argument name
-                # (e.g. "args" in *args) is ignored this function
-                if node.args.vararg:
-                    self._memo.ignored_names.add(node.args.vararg.arg)
-
-                # Ensure that any type shadowed by the variable keywrod argument name
-                # (e.g. "kwargs" in *kwargs) is ignored this function
-                if node.args.kwarg:
-                    self._memo.ignored_names.add(node.args.kwarg.arg)
-
-                for arg in all_args:
-                    annotation = self._convert_annotation(deepcopy(arg.annotation))
-                    if annotation:
-                        arg_annotations[arg.arg] = annotation
-
-                if node.args.vararg:
-                    annotation_ = self._convert_annotation(node.args.vararg.annotation)
-                    if annotation_:
-                        container = Name("tuple", ctx=Load())
-                        subscript_slice = Tuple(
-                            [
-                                annotation_,
-                                Constant(Ellipsis),
-                            ],
-                            ctx=Load(),
-                        )
-                        arg_annotations[node.args.vararg.arg] = Subscript(
-                            container, subscript_slice, ctx=Load()
-                        )
-
-                if node.args.kwarg:
-                    annotation_ = self._convert_annotation(node.args.kwarg.annotation)
-                    if annotation_:
-                        container = Name("dict", ctx=Load())
-                        subscript_slice = Tuple(
-                            [
-                                Name("str", ctx=Load()),
-                                annotation_,
-                            ],
-                            ctx=Load(),
-                        )
-                        arg_annotations[node.args.kwarg.arg] = Subscript(
-                            container, subscript_slice, ctx=Load()
-                        )
-
-                if arg_annotations:
-                    self._memo.variable_annotations.update(arg_annotations)
-
-            self.generic_visit(node)
-
-            if arg_annotations:
-                annotations_dict = Dict(
-                    keys=[Constant(key) for key in arg_annotations.keys()],
-                    values=[
-                        Tuple([Name(key, ctx=Load()), annotation], ctx=Load())
-                        for key, annotation in arg_annotations.items()
-                    ],
-                )
-                func_name = self._get_import(
-                    "typeguard._functions", "check_argument_types_internal"
-                )
-                args = [
-                    self._memo.joined_path,
-                    annotations_dict,
-                    self._memo.get_memo_name(),
-                ]
-                node.body.insert(
-                    self._memo.code_inject_index, Expr(Call(func_name, args, []))
-                )
-
-            # Add a checked "return None" to the end if there's no explicit return
-            # Skip if the return annotation is None or Any
-            if (
-                self._memo.return_annotation
-                and (not self._memo.is_async or not self._memo.has_yield_expressions)
-                and not isinstance(node.body[-1], Return)
-                and (
-                    not isinstance(self._memo.return_annotation, Constant)
-                    or self._memo.return_annotation.value is not None
-                )
-            ):
-                func_name = self._get_import(
-                    "typeguard._functions", "check_return_type_internal"
-                )
-                return_node = Return(
-                    Call(
-                        func_name,
-                        [
-                            self._memo.joined_path,
-                            Constant(None),
-                            self._memo.return_annotation,
-                            self._memo.get_memo_name(),
-                        ],
-                        [],
-                    )
-                )
-
-                # Replace a placeholder "pass" at the end
-                if isinstance(node.body[-1], Pass):
-                    copy_location(return_node, node.body[-1])
-                    del node.body[-1]
-
-                node.body.append(return_node)
-
-            # Insert code to create the call memo, if it was ever needed for this
-            # function
-            if self._memo.memo_var_name:
-                memo_kwargs: dict[str, Any] = {}
-                if self._memo.parent and isinstance(self._memo.parent.node, ClassDef):
-                    for decorator in node.decorator_list:
-                        if (
-                            isinstance(decorator, Name)
-                            and decorator.id == "staticmethod"
-                        ):
-                            break
-                        elif (
-                            isinstance(decorator, Name)
-                            and decorator.id == "classmethod"
-                        ):
-                            arglist = node.args.posonlyargs or node.args.args
-                            memo_kwargs["self_type"] = Name(
-                                id=arglist[0].arg, ctx=Load()
-                            )
-                            break
-                    else:
-                        if arglist := node.args.posonlyargs or node.args.args:
-                            if node.name == "__new__":
-                                memo_kwargs["self_type"] = Name(
-                                    id=arglist[0].arg, ctx=Load()
-                                )
-                            else:
-                                memo_kwargs["self_type"] = Attribute(
-                                    Name(id=arglist[0].arg, ctx=Load()),
-                                    "__class__",
-                                    ctx=Load(),
-                                )
-
-                # Construct the function reference
-                # Nested functions get special treatment: the function name is added
-                # to free variables (and the closure of the resulting function)
-                names: list[str] = [node.name]
-                memo = self._memo.parent
-                while memo:
-                    if isinstance(memo.node, (FunctionDef, AsyncFunctionDef)):
-                        # This is a nested function. Use the function name as-is.
-                        del names[:-1]
-                        break
-                    elif not isinstance(memo.node, ClassDef):
-                        break
-
-                    names.insert(0, memo.node.name)
-                    memo = memo.parent
-
-                config_keywords = self._memo.get_config_keywords()
-                if config_keywords:
-                    memo_kwargs["config"] = Call(
-                        self._get_import("dataclasses", "replace"),
-                        [self._get_import("typeguard._config", "global_config")],
-                        config_keywords,
-                    )
-
-                self._memo.memo_var_name.id = self._memo.get_unused_name("memo")
-                memo_store_name = Name(id=self._memo.memo_var_name.id, ctx=Store())
-                globals_call = Call(Name(id="globals", ctx=Load()), [], [])
-                locals_call = Call(Name(id="locals", ctx=Load()), [], [])
-                memo_expr = Call(
-                    self._get_import("typeguard", "TypeCheckMemo"),
-                    [globals_call, locals_call],
-                    [keyword(key, value) for key, value in memo_kwargs.items()],
-                )
-                node.body.insert(
-                    self._memo.code_inject_index,
-                    Assign([memo_store_name], memo_expr),
-                )
-
-                self._memo.insert_imports(node)
-
-                # Special case the __new__() method to create a local alias from the
-                # class name to the first argument (usually "cls")
-                if (
-                    isinstance(node, FunctionDef)
-                    and node.args
-                    and self._memo.parent is not None
-                    and isinstance(self._memo.parent.node, ClassDef)
-                    and node.name == "__new__"
-                ):
-                    first_args_expr = Name(node.args.args[0].arg, ctx=Load())
-                    cls_name = Name(self._memo.parent.node.name, ctx=Store())
-                    node.body.insert(
-                        self._memo.code_inject_index,
-                        Assign([cls_name], first_args_expr),
-                    )
-
-                # Rmove any placeholder "pass" at the end
-                if isinstance(node.body[-1], Pass):
-                    del node.body[-1]
-
-        return node
+        pass
 
     def visit_AsyncFunctionDef(
         self, node: AsyncFunctionDef
     ) -> FunctionDef | AsyncFunctionDef | None:
-        return self.visit_FunctionDef(node)
+        pass
 
     def visit_Return(self, node: Return) -> Return:
         """This injects type checks into "return" statements."""
-        self.generic_visit(node)
-        if (
-            self._memo.return_annotation
-            and self._memo.should_instrument
-            and not self._memo.is_ignored_name(self._memo.return_annotation)
-        ):
-            func_name = self._get_import(
-                "typeguard._functions", "check_return_type_internal"
-            )
-            old_node = node
-            retval = old_node.value or Constant(None)
-            node = Return(
-                Call(
-                    func_name,
-                    [
-                        self._memo.joined_path,
-                        retval,
-                        self._memo.return_annotation,
-                        self._memo.get_memo_name(),
-                    ],
-                    [],
-                )
-            )
-            copy_location(node, old_node)
-
-        return node
+        pass
 
     def visit_Yield(self, node: Yield) -> Yield | Call:
         """
@@ -950,48 +398,7 @@ class TypeguardTransformer(NodeTransformer):
         value and the value sent back to the generator, when appropriate.
 
         """
-        self._memo.has_yield_expressions = True
-        self.generic_visit(node)
-
-        if (
-            self._memo.yield_annotation
-            and self._memo.should_instrument
-            and not self._memo.is_ignored_name(self._memo.yield_annotation)
-        ):
-            func_name = self._get_import("typeguard._functions", "check_yield_type")
-            yieldval = node.value or Constant(None)
-            node.value = Call(
-                func_name,
-                [
-                    self._memo.joined_path,
-                    yieldval,
-                    self._memo.yield_annotation,
-                    self._memo.get_memo_name(),
-                ],
-                [],
-            )
-
-        if (
-            self._memo.send_annotation
-            and self._memo.should_instrument
-            and not self._memo.is_ignored_name(self._memo.send_annotation)
-        ):
-            func_name = self._get_import("typeguard._functions", "check_send_type")
-            old_node = node
-            call_node = Call(
-                func_name,
-                [
-                    self._memo.joined_path,
-                    old_node,
-                    self._memo.send_annotation,
-                    self._memo.get_memo_name(),
-                ],
-                [],
-            )
-            copy_location(call_node, old_node)
-            return call_node
-
-        return node
+        pass
 
     def visit_AnnAssign(self, node: AnnAssign) -> Any:
         """
@@ -999,41 +406,7 @@ class TypeguardTransformer(NodeTransformer):
         function body.
 
         """
-        self.generic_visit(node)
-
-        if (
-            isinstance(self._memo.node, (FunctionDef, AsyncFunctionDef))
-            and node.annotation
-            and isinstance(node.target, Name)
-        ):
-            self._memo.ignored_names.add(node.target.id)
-            annotation = self._convert_annotation(deepcopy(node.annotation))
-            if annotation:
-                self._memo.variable_annotations[node.target.id] = annotation
-                if node.value:
-                    func_name = self._get_import(
-                        "typeguard._functions", "check_variable_assignment"
-                    )
-                    targets_arg = List(
-                        [
-                            Tuple(
-                                [Constant(node.target.id), annotation],
-                                ctx=Load(),
-                            )
-                        ],
-                        ctx=Load(),
-                    )
-                    node.value = Call(
-                        func_name,
-                        [
-                            node.value,
-                            targets_arg,
-                            self._memo.get_memo_name(),
-                        ],
-                        [],
-                    )
-
-        return node
+        pass
 
     def visit_Assign(self, node: Assign) -> Any:
         """
@@ -1041,187 +414,18 @@ class TypeguardTransformer(NodeTransformer):
         body. The variable must have been annotated earlier in the function body.
 
         """
-        self.generic_visit(node)
-
-        # Only instrument function-local assignments
-        if isinstance(self._memo.node, (FunctionDef, AsyncFunctionDef)):
-            preliminary_targets: list[
-                PreliminaryNameTypePair | list[PreliminaryNameTypePair]
-            ] = []
-            check_required = False
-            for node_target in node.targets:
-                elts: Sequence[expr]
-                if isinstance(node_target, Name):
-                    elts = [node_target]
-                    single_target = True
-                elif isinstance(node_target, Tuple):
-                    elts = node_target.elts
-                    single_target = False
-                else:
-                    continue
-
-                annotations_: list[PreliminaryNameTypePair] = []
-                for exp in elts:
-                    prefix = ""
-                    if isinstance(exp, Starred):
-                        exp = exp.value
-                        prefix = "*"
-
-                    path: list[str] = []
-                    while isinstance(exp, Attribute):
-                        path.insert(0, exp.attr)
-                        exp = exp.value
-
-                    if isinstance(exp, Name):
-                        if not path:
-                            self._memo.ignored_names.add(exp.id)
-
-                        path.insert(0, exp.id)
-                        name = prefix + ".".join(path)
-                        if len(path) == 1 and (
-                            annotation := self._memo.variable_annotations.get(exp.id)
-                        ):
-                            annotations_.append((Constant(name), annotation))
-                            check_required = True
-                        else:
-                            annotations_.append((Constant(name), None))
-
-                preliminary_targets.append(
-                    annotations_[0] if single_target else annotations_
-                )
-
-            if check_required:
-                # Replace missing annotations with typing.Any
-                targets: list[NameTypePair | list[NameTypePair]] = []
-                for items in preliminary_targets:
-                    if isinstance(items, list):
-                        target_list: list[NameTypePair] = []
-                        targets.append(target_list)
-                        for key, expression_or_none in items:
-                            expression = expression_or_none or self._get_import(
-                                "typing", "Any"
-                            )
-                            target_list.append((key, expression))
-                    else:
-                        key, expression_or_none = items
-                        expression = expression_or_none or self._get_import(
-                            "typing", "Any"
-                        )
-                        targets.append((key, expression))
-
-                func_name = self._get_import(
-                    "typeguard._functions", "check_variable_assignment"
-                )
-                elements: list[expr] = []
-                for target in targets:
-                    if isinstance(target, list):
-                        elements.append(
-                            List(
-                                [
-                                    Tuple([name, ann], ctx=Load())
-                                    for name, ann in target
-                                ],
-                                ctx=Load(),
-                            )
-                        )
-                    else:
-                        name_constant, ann = target
-                        elements.append(Tuple([name_constant, ann], ctx=Load()))
-
-                targets_arg = List(elements, ctx=Load())
-                node.value = Call(
-                    func_name,
-                    [node.value, targets_arg, self._memo.get_memo_name()],
-                    [],
-                )
-
-        return node
+        pass
 
     def visit_NamedExpr(self, node: NamedExpr) -> Any:
         """This injects a type check into an assignment expression (a := foo())."""
-        self.generic_visit(node)
-
-        # Only instrument function-local assignments
-        if isinstance(self._memo.node, (FunctionDef, AsyncFunctionDef)) and isinstance(
-            node.target, Name
-        ):
-            self._memo.ignored_names.add(node.target.id)
-
-            # Bail out if no matching annotation is found
-            annotation = self._memo.variable_annotations.get(node.target.id)
-            if annotation is None:
-                return node
-
-            func_name = self._get_import(
-                "typeguard._functions", "check_variable_assignment"
-            )
-            node.value = Call(
-                func_name,
-                [
-                    node.value,
-                    List(
-                        [
-                            List(
-                                [
-                                    Tuple(
-                                        [Constant(node.target.id), annotation],
-                                        ctx=Load(),
-                                    )
-                                ],
-                                ctx=Load(),
-                            )
-                        ],
-                        ctx=Load(),
-                    ),
-                    self._memo.get_memo_name(),
-                ],
-                [],
-            )
-
-        return node
+        pass
 
     def visit_AugAssign(self, node: AugAssign) -> Any:
         """
         This injects a type check into an augmented assignment expression (a += 1).
 
         """
-        self.generic_visit(node)
-
-        # Only instrument function-local assignments
-        if isinstance(self._memo.node, (FunctionDef, AsyncFunctionDef)) and isinstance(
-            node.target, Name
-        ):
-            # Bail out if no matching annotation is found
-            annotation = self._memo.variable_annotations.get(node.target.id)
-            if annotation is None:
-                return node
-
-            # Bail out if the operator is not found (newer Python version?)
-            try:
-                operator_func_name = aug_assign_functions[node.op.__class__]
-            except KeyError:
-                return node
-
-            operator_func = self._get_import("operator", operator_func_name)
-            operator_call = Call(
-                operator_func, [Name(node.target.id, ctx=Load()), node.value], []
-            )
-            targets_arg = List(
-                [Tuple([Constant(node.target.id), annotation], ctx=Load())],
-                ctx=Load(),
-            )
-            check_call = Call(
-                self._get_import("typeguard._functions", "check_variable_assignment"),
-                [
-                    operator_call,
-                    targets_arg,
-                    self._memo.get_memo_name(),
-                ],
-                [],
-            )
-            return Assign(targets=[node.target], value=check_call)
-
-        return node
+        pass
 
     def visit_If(self, node: If) -> Any:
         """
@@ -1229,15 +433,4 @@ class TypeguardTransformer(NodeTransformer):
         "if typing.TYPE_CHECKING:" block, so that they won't be type checked.
 
         """
-        self.generic_visit(node)
-
-        if (
-            self._memo is self._module_memo
-            and isinstance(node.test, Name)
-            and self._memo.name_matches(node.test, "typing.TYPE_CHECKING")
-        ):
-            collector = NameCollector()
-            collector.visit(node)
-            self._memo.ignored_names.update(collector.names)
-
-        return node
+        pass

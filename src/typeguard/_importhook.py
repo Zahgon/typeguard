@@ -45,11 +45,11 @@ T = TypeVar("T")
 def _call_with_frames_removed(
     f: Callable[P, T], *args: P.args, **kwargs: P.kwargs
 ) -> T:
-    return f(*args, **kwargs)
+    pass
 
 
 def optimized_cache_from_source(path: str, debug_override: bool | None = None) -> str:
-    return cache_from_source(path, debug_override, optimization=OPTIMIZATION)
+    pass
 
 
 class TypeguardLoader(SourceFileLoader):
@@ -60,50 +60,12 @@ class TypeguardLoader(SourceFileLoader):
         *,
         _optimize: int = -1,
     ) -> CodeType:
-        if isinstance(path, (str, PathLike)):
-            filename = path
-        else:
-            filename = os.fsdecode(bytes(path))
-
-        if isinstance(data, (ast.Module, ast.Expression, ast.Interactive)):
-            module = data
-        else:
-            if isinstance(data, str):
-                source = data
-            else:
-                source = decode_source(data)
-
-            module = _call_with_frames_removed(
-                ast.parse,
-                source,
-                filename,
-                "exec",
-            )
-
-        tree = TypeguardTransformer().visit(module)
-        ast.fix_missing_locations(tree)
-
-        if global_config.debug_instrumentation and sys.version_info >= (3, 9):
-            print(
-                f"Source code of {path!r} after instrumentation:\n"
-                "----------------------------------------------",
-                file=sys.stderr,
-            )
-            print(ast.unparse(tree), file=sys.stderr)
-            print("----------------------------------------------", file=sys.stderr)
-
-        return _call_with_frames_removed(
-            compile, tree, filename, "exec", 0, dont_inherit=True
-        )
+        pass
 
     def exec_module(self, module: ModuleType) -> None:
         # Use a custom optimization marker – the import lock should make this monkey
         # patch safe
-        with patch(
-            "importlib._bootstrap_external.cache_from_source",
-            optimized_cache_from_source,
-        ):
-            super().exec_module(module)
+        pass
 
 
 class TypeguardFinder(MetaPathFinder):
@@ -127,13 +89,7 @@ class TypeguardFinder(MetaPathFinder):
         path: Sequence[str] | None,
         target: types.ModuleType | None = None,
     ) -> ModuleSpec | None:
-        if self.should_instrument(fullname):
-            spec = self._original_pathfinder.find_spec(fullname, path, target)
-            if spec is not None and isinstance(spec.loader, SourceFileLoader):
-                spec.loader = TypeguardLoader(spec.loader.name, spec.loader.path)
-                return spec
-
-        return None
+        pass
 
     def should_instrument(self, module_name: str) -> bool:
         """
@@ -143,14 +99,7 @@ class TypeguardFinder(MetaPathFinder):
             ``xyz.abc``)
 
         """
-        if self.packages is None:
-            return True
-
-        for package in self.packages:
-            if module_name == package or module_name.startswith(package + "."):
-                return True
-
-        return False
+        pass
 
 
 class ImportHookManager:
