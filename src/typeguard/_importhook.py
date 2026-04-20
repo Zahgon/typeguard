@@ -123,10 +123,7 @@ class ImportHookManager:
 
     def uninstall(self) -> None:
         """Uninstall the import hook."""
-        try:
-            sys.meta_path.remove(self.hook)
-        except ValueError:
-            pass  # already removed
+        pass
 
 
 def install_import_hook(
